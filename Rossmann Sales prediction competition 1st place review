@@ -1,0 +1,60 @@
+Rossmann 매출 예측 대회 (source: https://www.kaggle.com/competitions/rossmann-store-sales/overview)
+1위 수상작 리뷰 https://storage.googleapis.com/kaggle-forum-message-attachments/102102/3454/Rossmann_nr1_doc.pdf 
+
+문제 정의
+3년 간의 Rossmann 매출 데이터를 기반으로 1000개 이상의 점포에 대해 앞으로 6주 간의 매출을 예측해야 함
+즉, 시계열 데이터를 기반으로 한 회귀 문제
+
+데이터
+Dataset Description
+You are provided with historical sales data for 1,115 Rossmann stores. The task is to forecast the "Sales" column for the test set. Note that some stores in the dataset were temporarily closed for refurbishment.
+
+Files
+train.csv - historical data including Sales
+test.csv - historical data excluding Sales
+sample_submission.csv - a sample submission file in the correct format
+store.csv - supplemental information about the stores
+Data fields
+Most of the fields are self-explanatory. The following are descriptions for those that aren't.
+
+Id - an Id that represents a (Store, Date) duple within the test set
+Store - a unique Id for each store
+Sales - the turnover for any given day (this is what you are predicting)
+Customers - the number of customers on a given day
+Open - an indicator for whether the store was open: 0 = closed, 1 = open
+StateHoliday - indicates a state holiday. Normally all stores, with few exceptions, are closed on state holidays. Note that all schools are closed on public holidays and weekends. a = public holiday, b = Easter holiday, c = Christmas, 0 = None
+SchoolHoliday - indicates if the (Store, Date) was affected by the closure of public schools
+StoreType - differentiates between 4 different store models: a, b, c, d
+Assortment - describes an assortment level: a = basic, b = extra, c = extended
+CompetitionDistance - distance in meters to the nearest competitor store
+CompetitionOpenSince[Month/Year] - gives the approximate year and month of the time the nearest competitor was opened
+Promo - indicates whether a store is running a promo on that day
+Promo2 - Promo2 is a continuing and consecutive promotion for some stores: 0 = store is not participating, 1 = store is participating
+Promo2Since[Year/Week] - describes the year and calendar week when the store started participating in Promo2
+PromoInterval - describes the consecutive intervals Promo2 is started, naming the months the promotion is started anew. E.g. "Feb,May,Aug,Nov" means each round starts in February, May, August, November of any given year for that store
+
+전처리
+판매 데이터를 로그변환함. 판매수가 0으로 기록된 데이터는 삭제함
+외부 데이터(날씨, 인구통계) 등은 성능 개선에 도움이 되지 않았고, 프로모션 효과가 가장 중요한 특징으로 나타남
+
+주어진 데이터로 데이터를 생성해서 추가로 학습시키는 방법을 선택함
+데이터 생성을 위한 feature selection에 적용한 기준은 다음과 같음
+1. 최근 데이터
+: 각 매장에 대해 과거의 판매 데이터르 기반으로 최근 1분기, 6개원, 1년, 2년 등의 데이터를 추출하여 feature를 생성함
+이때 주중, 프로모션, 공휴일 등의 이벤트가 중요한 변수로 확인됨
+2. 시간적 정보
+: 각 기록이 특정 이벤트와 어떤 관계가 있는지 나타내는 data counter를 생성해 매장의 휴일 수나 월별, 주별 정보를 포함시켰다.
+3. 현재 추세
+: 지난 1분기와 1년의 데이터를 통해 매장별 선형 모델을 사용해 추세를 예측하고 이를 기반으로 6주간 예측을 했다.
+(simpson's paradox를 방지하기 위함인지? 매장별로 각각의 선형 모델을 사용했다는 점이 인상깊음. 여기서 사용된 선형 모델은 릿지회귀모델임)
+
+feature selection / ensemble
+모델이 오버피팅되지 않도록 홀드아웃 세트를 사용함 (홀드아웃 세트는 훈련 세트의 마지막 6주)
+홀드 아웃 세트를 기반으로 가장 유용한 특징만 선택함. 무작위 모델을 통해 성능을 향상시키고 여러 모델을 앙상블하여 성능을 개선함.
+최종적으로는 하모니 평균을 사용해 앙상블된 예측값을 합침
+
+Modeling / Training
+XGBoost를 사용했고, 여러번의 시행을 통해 hypertuning을 진행함. 
+하이퍼 파라미터로는 훈련 라운드 수, 트리별 칼럼 샘플림 비율을 조정함
+추가적으로 월별 모델(특정 월만을 사용하여 훈련한 모델), 한달 앞서 예측하는 모델을 만들어 성능을 개선함
+여러 XGBoost 모델을 앙상블하여 하모니 평균을 사용해 예측값을 결합함.
